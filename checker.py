@@ -1,35 +1,25 @@
 import grequests
-from requests import Response
+import requests
+import time
+from tqdm import tqdm
+from multiprocessing import Pool
 
-class Status:
-    incorrect_url: int = -2
-    fail: int = -1
-    redirect: int = 0
-    succes: int = 1
+def __check__(domain:str) -> tuple[str,int,float]:
+    st=time.time()
+    try:
+        req:requests.Response = requests.get(domain)
+    except Exception:
+        return domain,500,time.time()-st
+    return req.url,req.status_code,time.time()-st
 
-class Checker:
-    def __init__(self, url_list: list) -> None:
-        self.urls = url_list
-        self.requests: dict = {}
-        self.responses: list = []
-        self.a:list = []
-        self.raw_responses: list = []
-        print("")
-        
-    def parse_code(code) -> Status:
-        if(code!=None):
-            if(code.status_code==200):
-                return Status.succes
-            if(code.status_code==404):
-                return Status.fail
-            if(code.status_code in [302,303,307,308]):
-                return Status.redirect
-        return Status.incorrect_url
-    def check(self) -> list:
-        for domain in self.urls:
-            self.requests[domain] = grequests.get(domain)
-        raw_responses = grequests.map(self.requests.values())
-        for index, response in enumerate(raw_responses):
-            response: Response = response
-            self.responses.append({list(self.urls.keys())[index]:Checker.parse_code(response)})
-        return self.responses
+def run_checker(domains:list) -> list:
+    results:list
+    with Pool() as pool:
+        results = tqdm(
+            pool.imap_unordered(__check__, domains,chunksize=10),
+            total=domains.__len__(),
+            mininterval=1
+        )
+        for domain, result, et in results:
+            tqdm.write(f"[{domain}] > GET > {result} | {round(et,3)}s")
+    return results
